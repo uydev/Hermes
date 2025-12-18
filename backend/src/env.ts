@@ -12,7 +12,7 @@ const EnvSchema = z.object({
     .refine((v) => Number.isFinite(v) && v > 0 && v < 65536, 'PORT must be a valid TCP port'),
 
   // Used to sign Hermes guest JWTs (MVP auth)
-  HERMES_JWT_SECRET: z.string().min(16).optional(),
+  HERMES_JWT_SIGNING_KEY: z.string().min(16).optional(),
 
   // LiveKit token signing (set when you reach Phase 2)
   LIVEKIT_URL: z.string().url().optional(),

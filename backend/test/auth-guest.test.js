@@ -8,7 +8,7 @@ function makeEnv() {
   return {
     PORT: 3001,
     NODE_ENV: 'test',
-    HERMES_JWT_SECRET: '0123456789abcdef0123456789abcdef',
+    HERMES_JWT_SIGNING_KEY: '0123456789abcdef0123456789abcdef',
     LIVEKIT_URL: undefined,
     LIVEKIT_API_KEY: undefined,
     LIVEKIT_API_SECRET: undefined,
@@ -39,7 +39,7 @@ test('POST /auth/guest issues a Hermes JWT', async () => {
   assert.ok(body.identity);
   assert.ok(body.expiresAt);
 
-  const verified = jwt.verify(body.token, env.HERMES_JWT_SECRET, {
+  const verified = jwt.verify(body.token, env.HERMES_JWT_SIGNING_KEY, {
     issuer: 'hermes-backend',
     audience: 'hermes-client',
   });

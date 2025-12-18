@@ -2,20 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { buildApp } = require('../dist/server');
-
-function makeEnv() {
-  return {
-    PORT: 3001,
-    NODE_ENV: 'test',
-    HERMES_JWT_SECRET: '0123456789abcdef0123456789abcdef',
-    LIVEKIT_URL: undefined,
-    LIVEKIT_API_KEY: undefined,
-    LIVEKIT_API_SECRET: undefined,
-  };
-}
+const { loadEnv } = require('../dist/env');
 
 test('GET /health returns ok', async () => {
-  const app = buildApp({ logger: false, env: makeEnv() });
+  // Loads from backend/.env (dotenv) if present, otherwise from process.env.
+  const env = loadEnv();
+  const app = buildApp({ logger: false, env });
   const res = await app.inject({ method: 'GET', url: '/health' });
 
   assert.equal(res.statusCode, 200);

@@ -18,10 +18,10 @@ const GuestAuthRequestSchema = z.object({
 type GuestAuthRequest = z.infer<typeof GuestAuthRequestSchema>;
 
 function requireJwtSecret(env: Env): string {
-  const secret = env.HERMES_JWT_SECRET;
+  const secret = env.HERMES_JWT_SIGNING_KEY;
   if (!secret || secret.trim().length < 16) {
     throw new Error(
-      'Server misconfigured: HERMES_JWT_SECRET must be set (min 16 chars) to issue guest tokens.',
+      'Server misconfigured: HERMES_JWT_SIGNING_KEY must be set (min 16 chars) to issue guest tokens.',
     );
   }
   return secret;
