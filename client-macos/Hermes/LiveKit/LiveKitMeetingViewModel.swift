@@ -27,6 +27,19 @@ final class LiveKitMeetingViewModel: ObservableObject {
         state = .connecting
 
         do {
+            // Request AV permissions up-front so failures are explicit (vs. opaque "Cancelled").
+            let cameraOk = await AVPermissions.requestCamera()
+            if !cameraOk {
+                state = .failed("Camera permission denied. Enable Camera for Hermes in System Settings → Privacy & Security → Camera.")
+                return
+            }
+
+            let micOk = await AVPermissions.requestMicrophone()
+            if !micOk {
+                state = .failed("Microphone permission denied. Enable Microphone for Hermes in System Settings → Privacy & Security → Microphone.")
+                return
+            }
+
             let room = Room()
             self.room = room
 
@@ -48,6 +61,10 @@ final class LiveKitMeetingViewModel: ObservableObject {
             isCameraEnabled = true
             state = .connected
         } catch {
+            if error is CancellationError {
+                state = .failed("Cancelled. This is usually caused by missing permissions or the view lifecycle cancelling the connect task.")
+                return
+            }
             state = .failed(error.localizedDescription)
         }
     }
