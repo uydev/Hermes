@@ -6,6 +6,7 @@ async function main() {
 
   const app = buildApp({
     logger: env.NODE_ENV !== 'test',
+    env,
   });
 
   await app.listen({
