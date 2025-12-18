@@ -47,4 +47,30 @@ final class BackendClient {
             throw BackendError.decodingError
         }
     }
+
+    struct RoomsJoinRequest: Codable {
+        let room: String?
+    }
+
+    func roomsJoin(hermesJwt: String, room: String? = nil) async throws -> RoomJoinResponse {
+        let url = baseUrl.appendingPathComponent("rooms/join")
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(hermesJwt)", forHTTPHeaderField: "Authorization")
+
+        let payload = RoomsJoinRequest(room: room)
+        req.httpBody = try JSONEncoder().encode(payload)
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw BackendError.decodingError }
+        guard (200..<300).contains(http.statusCode) else { throw BackendError.httpError(http.statusCode) }
+
+        do {
+            return try JSONDecoder().decode(RoomJoinResponse.self, from: data)
+        } catch {
+            throw BackendError.decodingError
+        }
+    }
 }

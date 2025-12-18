@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { loadEnv, type Env } from './env';
 import { authRoutes } from './routes/auth';
+import { roomsRoutes } from './routes/rooms';
 
 export type BuildOptions = {
   logger?: boolean;
@@ -24,6 +25,7 @@ export function buildApp(opts: BuildOptions = {}): FastifyInstance {
   });
 
   app.register(authRoutes, { env });
+  app.register(roomsRoutes, { env });
 
   return app;
 }

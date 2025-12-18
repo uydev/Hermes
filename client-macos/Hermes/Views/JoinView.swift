@@ -2,6 +2,7 @@ import SwiftUI
 
 struct JoinView: View {
     @EnvironmentObject private var sessionStore: SessionStore
+    @EnvironmentObject private var meetingStore: MeetingStore
 
     @State private var displayName: String = ""
     @State private var room: String = ""
@@ -78,6 +79,9 @@ struct JoinView: View {
                 desiredRole: nil
             )
             sessionStore.setSession(session)
+
+            let join = try await backend.roomsJoin(hermesJwt: session.token, room: nil)
+            meetingStore.setRoomJoin(join)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -87,4 +91,5 @@ struct JoinView: View {
 #Preview {
     JoinView()
         .environmentObject(SessionStore())
+        .environmentObject(MeetingStore())
 }

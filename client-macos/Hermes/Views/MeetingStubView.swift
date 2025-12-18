@@ -5,7 +5,7 @@ struct MeetingStubView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Connected (Phase 1)")
+            Text("Deprecated")
                 .font(.title2)
                 .bold()
 

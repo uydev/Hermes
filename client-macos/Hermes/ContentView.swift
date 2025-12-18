@@ -9,11 +9,12 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var sessionStore: SessionStore
+    @EnvironmentObject private var meetingStore: MeetingStore
 
     var body: some View {
         NavigationStack {
-            if sessionStore.session?.token.isEmpty == false {
-                MeetingStubView()
+            if meetingStore.roomJoin != nil {
+                MeetingShellView()
             } else {
                 JoinView()
             }
@@ -24,4 +25,5 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environmentObject(SessionStore())
+        .environmentObject(MeetingStore())
 }

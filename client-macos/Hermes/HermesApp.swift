@@ -10,11 +10,13 @@ import SwiftUI
 @main
 struct HermesApp: App {
     @StateObject private var sessionStore = SessionStore()
+    @StateObject private var meetingStore = MeetingStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(sessionStore)
+                .environmentObject(meetingStore)
         }
     }
 }
