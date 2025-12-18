@@ -9,8 +9,8 @@ struct JoinView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
 
-    // Phase 1 default: local backend
-    private let backend = BackendClient(baseUrl: URL(string: "http://localhost:3001/")!)
+    // Local backend (use IPv4 loopback to avoid macOS preferring ::1 when server isn't bound on IPv6)
+    private let backend = BackendClient(baseUrl: URL(string: "http://127.0.0.1:3001/")!)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

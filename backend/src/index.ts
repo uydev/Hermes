@@ -11,7 +11,7 @@ async function main() {
 
   await app.listen({
     port: env.PORT,
-    host: '0.0.0.0',
+    host: '::',
   });
 }
 
