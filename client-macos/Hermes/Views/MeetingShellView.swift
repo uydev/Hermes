@@ -4,11 +4,10 @@ struct MeetingShellView: View {
     @EnvironmentObject private var sessionStore: SessionStore
     @EnvironmentObject private var meetingStore: MeetingStore
 
+    @StateObject private var liveKit = LiveKitMeetingViewModel()
+
     @State private var sidebarSelection: SidebarTab = .participants
     @State private var isSidebarVisible: Bool = true
-
-    @State private var isMuted = false
-    @State private var isCameraOff = false
 
     enum SidebarTab: String, CaseIterable {
         case participants = "Participants"
@@ -41,6 +40,10 @@ struct MeetingShellView: View {
             }
         }
         .toolbar(.hidden)
+        .task(id: meetingStore.roomJoin?.liveKitToken) {
+            guard let join = meetingStore.roomJoin else { return }
+            await liveKit.connectIfNeeded(join: join)
+        }
     }
 
     private var topBar: some View {
@@ -72,21 +75,48 @@ struct MeetingShellView: View {
 
     private var mainStage: some View {
         VStack(spacing: 16) {
-            // Placeholder “stage” tile (will become active speaker / grid)
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.thinMaterial)
                 .overlay {
-                    VStack(spacing: 8) {
-                        Image(systemName: "video")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.secondary)
-                        Text("Video stage (Phase 2 wiring)")
-                            .font(.headline)
-                        Text("Next: connect LiveKit + render tracks")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    switch liveKit.state {
+                    case .idle, .connecting:
+                        VStack(spacing: 10) {
+                            ProgressView()
+                            Text("Connecting…")
+                                .font(.headline)
+                            Text("Preparing camera and microphone")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(24)
+                    case .connected:
+                        if let track = liveKit.localVideoTrack {
+                            LiveKitVideoView(track: track)
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        } else {
+                            VStack(spacing: 8) {
+                                Image(systemName: "video.slash")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(.secondary)
+                                Text("Camera not available")
+                                    .font(.headline)
+                            }
+                            .padding(24)
+                        }
+                    case .failed(let message):
+                        VStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 28))
+                                .foregroundStyle(.yellow)
+                            Text("Failed to start video")
+                                .font(.headline)
+                            Text(message)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(24)
                     }
-                    .padding(24)
                 }
                 .padding(20)
 
@@ -108,21 +138,22 @@ struct MeetingShellView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 10) {
-            controlButton(title: isMuted ? "Unmute" : "Mute",
-                          systemImage: isMuted ? "mic.slash.fill" : "mic.fill",
-                          isActive: isMuted) {
-                isMuted.toggle()
+            controlButton(title: liveKit.isMicEnabled ? "Mute" : "Unmute",
+                          systemImage: liveKit.isMicEnabled ? "mic.fill" : "mic.slash.fill",
+                          isActive: !liveKit.isMicEnabled) {
+                Task { await liveKit.toggleMic() }
             }
 
-            controlButton(title: isCameraOff ? "Start Video" : "Stop Video",
-                          systemImage: isCameraOff ? "video.slash.fill" : "video.fill",
-                          isActive: isCameraOff) {
-                isCameraOff.toggle()
+            controlButton(title: liveKit.isCameraEnabled ? "Stop Video" : "Start Video",
+                          systemImage: liveKit.isCameraEnabled ? "video.fill" : "video.slash.fill",
+                          isActive: !liveKit.isCameraEnabled) {
+                Task { await liveKit.toggleCamera() }
             }
 
             Spacer()
 
             Button(role: .destructive) {
+                Task { await liveKit.disconnect() }
                 meetingStore.clear()
                 sessionStore.signOut()
             } label: {
