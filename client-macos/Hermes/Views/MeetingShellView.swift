@@ -9,6 +9,7 @@ struct MeetingShellView: View {
     @State private var sidebarSelection: SidebarTab = .participants
     @State private var isSidebarVisible: Bool = true
     @State private var chatDraft: String = ""
+    @State private var isScreenSharePickerPresented: Bool = false
 
     enum SidebarTab: String, CaseIterable {
         case participants = "Participants"
@@ -151,6 +152,16 @@ struct MeetingShellView: View {
                 Task { await liveKit.toggleCamera() }
             }
 
+            controlButton(title: liveKit.isScreenSharing ? "Stop Share" : "Share",
+                          systemImage: liveKit.isScreenSharing ? "rectangle.on.rectangle.slash" : "rectangle.on.rectangle",
+                          isActive: liveKit.isScreenSharing) {
+                if liveKit.isScreenSharing {
+                    Task { await liveKit.stopScreenShare() }
+                } else {
+                    isScreenSharePickerPresented = true
+                }
+            }
+
             Spacer()
 
             Button(role: .destructive) {
@@ -168,6 +179,17 @@ struct MeetingShellView: View {
         }
         .padding(12)
         .background(.ultraThinMaterial)
+        .sheet(isPresented: $isScreenSharePickerPresented) {
+            ScreenSharePickerView { result in
+                isScreenSharePickerPresented = false
+                switch result {
+                case .cancelled:
+                    break
+                case .selected(let source):
+                    Task { await liveKit.startScreenShare(source: source) }
+                }
+            }
+        }
     }
 
     private func controlButton(title: String, systemImage: String, isActive: Bool, action: @escaping () -> Void) -> some View {

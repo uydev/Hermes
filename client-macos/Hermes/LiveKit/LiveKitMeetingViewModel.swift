@@ -23,6 +23,10 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
     @Published private(set) var participantTiles: [ParticipantTile] = []
     @Published private(set) var chatMessages: [ChatMessage] = []
 
+    @Published private(set) var isScreenSharing: Bool = false
+    private var screenSharePublication: LocalTrackPublication?
+    private var screenShareTrack: LocalVideoTrack?
+
     func connectIfNeeded(join: RoomJoinResponse) async {
         if case .connected = state { return }
         if case .connecting = state { return }
@@ -105,9 +109,74 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
         localAudioTrack = nil
         isMicEnabled = true
         isCameraEnabled = true
+        isScreenSharing = false
+        screenSharePublication = nil
+        screenShareTrack = nil
         participantTiles = []
         chatMessages = []
         state = .idle
+    }
+
+    // MARK: - Screen share (macOS)
+
+    func startScreenShare(source: MacOSScreenCaptureSource) async {
+        guard let room else { return }
+
+        if !ProcessInfo.processInfo.isOperatingSystemAtLeast(
+            OperatingSystemVersion(majorVersion: 12, minorVersion: 3, patchVersion: 0)
+        ) {
+            state = .failed("Screen sharing requires macOS 12.3 or later.")
+            return
+        }
+
+        do {
+            // Stop existing share first (if any)
+            if let pub = screenSharePublication {
+                try await room.localParticipant.unpublish(publication: pub)
+            }
+
+            let options = ScreenShareCaptureOptions(
+                dimensions: .h1080_169,
+                fps: 15,
+                showCursor: true,
+                appAudio: false,
+                includeCurrentApplication: false
+            )
+
+            // Create screen share track (source is marked as .screenShareVideo internally)
+            let track: LocalVideoTrack
+            if #available(macOS 12.3, *) {
+                track = LocalVideoTrack.createMacOSScreenShareTrack(source: source, options: options)
+            } else {
+                state = .failed("Screen sharing requires macOS 12.3 or later.")
+                return
+            }
+
+            // Publish
+            let pub = try await room.localParticipant.publish(videoTrack: track)
+
+            screenShareTrack = track
+            screenSharePublication = pub
+            isScreenSharing = true
+
+            rebuildParticipantTiles()
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    func stopScreenShare() async {
+        guard let room else { return }
+        guard let pub = screenSharePublication else { return }
+        do {
+            try await room.localParticipant.unpublish(publication: pub)
+        } catch {
+            // ignore
+        }
+        screenSharePublication = nil
+        screenShareTrack = nil
+        isScreenSharing = false
+        rebuildParticipantTiles()
     }
 
     // MARK: - Participants
@@ -135,35 +204,70 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
         )
         tiles.append(localTile)
 
+        // Local screenshare (as separate tile)
+        if let screenTrack = screenShareTrack, isScreenSharing {
+            tiles.append(
+                ParticipantTile(
+                    id: "local:\(localIdentity):screenshare",
+                    identity: localIdentity,
+                    displayName: "\(localName) — Screen",
+                    isLocal: true,
+                    videoTrack: screenTrack,
+                    isSpeaking: false,
+                    isMicEnabled: false,
+                    isCameraEnabled: true
+                )
+            )
+        }
+
         // Remote participants
         for (_, participant) in room.remoteParticipants {
             let identity = participant.identity?.stringValue ?? participant.sid?.stringValue ?? "unknown"
             let name = participant.name ?? identity
 
-            // Prefer first subscribed tracks (MVP).
-            // Also reflect mute state if available.
-            let videoPub = participant.videoTracks.first(where: { $0.track != nil })
-            let audioPub = participant.audioTracks.first(where: { $0.track != nil })
+            // Audio: microphone publication (prefer by source)
+            let micPub = participant.audioTracks.first(where: { $0.source == .microphone })
+                ?? participant.audioTracks.first(where: { $0.track != nil })
+            let isAudioMuted = (micPub?.isMuted ?? true) || micPub?.track == nil
+            let micEnabled = !isAudioMuted
 
-            let videoTrack = videoPub?.track as? VideoTrack
-            let isVideoMuted = (videoPub?.isMuted ?? (videoTrack == nil))
-            let isAudioMuted = (audioPub?.isMuted ?? (audioPub?.track == nil))
-
-            let camEnabled = videoTrack != nil && !isVideoMuted
-            let micEnabled = audioPub?.track != nil && !isAudioMuted
+            // Camera tile
+            let camPub = participant.videoTracks.first(where: { $0.source == .camera })
+                ?? participant.videoTracks.first(where: { $0.track != nil && $0.source == .unknown })
+            let camTrack = camPub?.track as? VideoTrack
+            let isCamMuted = (camPub?.isMuted ?? true) || camTrack == nil
+            let camEnabled = !isCamMuted
 
             tiles.append(
                 ParticipantTile(
-                    id: "remote:\(participant.sid)",
+                    id: "remote:\(participant.sid):camera",
                     identity: identity,
                     displayName: name,
                     isLocal: false,
-                    videoTrack: videoTrack,
+                    videoTrack: camTrack,
                     isSpeaking: participant.isSpeaking,
                     isMicEnabled: micEnabled,
                     isCameraEnabled: camEnabled
                 )
             )
+
+            // Screen share tile (if any)
+            let screenPub = participant.videoTracks.first(where: { $0.source == .screenShareVideo && $0.track != nil })
+            let screenTrack = screenPub?.track as? VideoTrack
+            if let screenTrack {
+                tiles.append(
+                    ParticipantTile(
+                        id: "remote:\(participant.sid):screenshare",
+                        identity: identity,
+                        displayName: "\(name) — Screen",
+                        isLocal: false,
+                        videoTrack: screenTrack,
+                        isSpeaking: false,
+                        isMicEnabled: false,
+                        isCameraEnabled: true
+                    )
+                )
+            }
         }
 
         // Prefer stable order: local first, then by name
