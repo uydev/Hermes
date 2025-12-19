@@ -292,6 +292,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Hermes needs camera access for video calls.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hermes needs microphone access for audio calls.";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Hermes needs screen recording permission to share your screen during video calls.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -336,6 +337,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Hermes needs camera access for video calls.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hermes needs microphone access for audio calls.";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Hermes needs screen recording permission to share your screen during video calls.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

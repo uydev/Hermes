@@ -4,6 +4,12 @@
 <dict>
 	<key>BackendURL</key>
 	<string>http://15.188.222.229</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Hermes needs camera access for video calls.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Hermes needs microphone access for audio calls.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Hermes needs screen recording permission to share your screen during video calls.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSExceptionDomains</key>
