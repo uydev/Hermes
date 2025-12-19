@@ -12,6 +12,11 @@ struct MeetingShellView: View {
     @State private var isScreenSharePickerPresented: Bool = false
     @State private var isDeviceSettingsPresented: Bool = false
     @State private var stagedTileId: String? = nil
+    @State private var isRecovering: Bool = false
+    @State private var recoveryError: String?
+
+    // Local backend (use IPv4 loopback to avoid macOS preferring ::1 when server isn't bound on IPv6)
+    private let backend = BackendClient(baseUrl: URL(string: "http://127.0.0.1:3001/")!)
 
     enum SidebarTab: String, CaseIterable {
         case participants = "Participants"
@@ -56,7 +61,7 @@ struct MeetingShellView: View {
                 Text(meetingStore.roomJoin?.room ?? "")
                     .font(.headline)
 
-                Text("Connected")
+                Text(statusText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -77,6 +82,23 @@ struct MeetingShellView: View {
         .background(.ultraThinMaterial)
     }
 
+    private var statusText: String {
+        switch liveKit.state {
+        case .idle:
+            return "Idle"
+        case .connecting:
+            return "Connecting…"
+        case .connected:
+            return "Connected"
+        case .reconnecting:
+            return "Reconnecting…"
+        case .disconnected:
+            return "Disconnected"
+        case .failed:
+            return "Error"
+        }
+    }
+
     private var mainStage: some View {
         VStack(spacing: 16) {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -93,8 +115,57 @@ struct MeetingShellView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .padding(24)
-                    case .connected:
-                        participantsGrid
+                    case .connected, .reconnecting:
+                        ZStack(alignment: .top) {
+                            participantsGrid
+
+                            if case .reconnecting = liveKit.state {
+                                reconnectBanner(text: "Reconnecting…")
+                                    .padding(.top, 10)
+                            }
+                        }
+                    case .disconnected(let message):
+                        VStack(spacing: 10) {
+                            Image(systemName: "wifi.slash")
+                                .font(.system(size: 28))
+                                .foregroundStyle(.yellow)
+                            Text("Disconnected")
+                                .font(.headline)
+                            Text(message ?? "Connection lost.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+
+                            HStack(spacing: 10) {
+                                Button {
+                                    Task { await recover() }
+                                } label: {
+                                    if isRecovering {
+                                        ProgressView().controlSize(.small)
+                                    } else {
+                                        Text("Reconnect")
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(isRecovering)
+
+                                Button("Leave") {
+                                    Task { await liveKit.disconnect() }
+                                    meetingStore.clear()
+                                    sessionStore.signOut()
+                                }
+                                .buttonStyle(.bordered)
+                            }
+
+                            if let recoveryError {
+                                Text(recoveryError)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.top, 6)
+                            }
+                        }
+                        .padding(24)
                     case .failed(let message):
                         VStack(spacing: 10) {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -106,6 +177,26 @@ struct MeetingShellView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
+
+                            Button {
+                                Task { await recover() }
+                            } label: {
+                                if isRecovering {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Text("Try again")
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isRecovering)
+
+                            if let recoveryError {
+                                Text(recoveryError)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.top, 6)
+                            }
                         }
                         .padding(24)
                     }
@@ -126,6 +217,52 @@ struct MeetingShellView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func reconnectBanner(text: String) -> some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .controlSize(.small)
+            Text(text)
+                .font(.caption)
+            Spacer()
+            Button("Reconnect") {
+                Task { await recover() }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(isRecovering)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 14)
+    }
+
+    @MainActor
+    private func recover() async {
+        guard !isRecovering else { return }
+        recoveryError = nil
+        isRecovering = true
+        defer { isRecovering = false }
+
+        guard let hermesJwt = sessionStore.session?.token else {
+            recoveryError = "Missing guest session. Please re-join."
+            return
+        }
+
+        do {
+            // Always mint a fresh LiveKit token and let the existing `.task(id:)` reconnect.
+            let room = meetingStore.roomJoin?.room
+            let join = try await backend.roomsJoin(hermesJwt: hermesJwt, room: room)
+            meetingStore.setRoomJoin(join)
+
+            // If we were connected but in a weird state, ensure local media is aligned.
+            await liveKit.applyMediaState()
+        } catch {
+            recoveryError = error.localizedDescription
+        }
     }
 
     private var participantsGrid: some View {

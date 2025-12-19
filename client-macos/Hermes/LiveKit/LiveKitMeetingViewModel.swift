@@ -9,10 +9,14 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
         case idle
         case connecting
         case connected
+        case reconnecting
+        case disconnected(String?)
         case failed(String)
     }
 
     @Published private(set) var state: State = .idle
+    @Published private(set) var connectionState: ConnectionState = .disconnected
+    @Published private(set) var lastDisconnectError: String?
 
     @Published private(set) var room: Room?
     @Published private(set) var localVideoTrack: LocalVideoTrack?
@@ -37,11 +41,15 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
     private var screenSharePublication: LocalTrackPublication?
     private var screenShareTrack: LocalVideoTrack?
 
-    func connectIfNeeded(join: RoomJoinResponse) async {
-        if case .connected = state { return }
-        if case .connecting = state { return }
+    private var lastJoin: RoomJoinResponse?
 
+    func connectIfNeeded(join: RoomJoinResponse) async {
+        if case .connecting = state { return }
+        if case .connected = state, connectionState == .connected { return }
+
+        lastJoin = join
         state = .connecting
+        lastDisconnectError = nil
 
         do {
             // Request AV permissions up-front so failures are explicit (vs. opaque "Cancelled").
@@ -57,25 +65,20 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
                 return
             }
 
+            // If we already had a room (e.g. reconnect attempt), disconnect it first.
+            if let existing = room {
+                await existing.disconnect()
+            }
+
             let room = Room(delegate: self)
             self.room = room
 
             // Connect
             try await room.connect(url: join.liveKitUrl, token: join.liveKitToken)
 
-            // Create local tracks
-            let video = LocalVideoTrack.createCameraTrack()
-            let audio = LocalAudioTrack.createTrack()
+            // Publish local media (respect current toggles & selected camera).
+            try await ensureLocalMediaPublished()
 
-            self.localVideoTrack = video
-            self.localAudioTrack = audio
-
-            // Publish
-            try await room.localParticipant.publish(videoTrack: video)
-            try await room.localParticipant.publish(audioTrack: audio)
-
-            isMicEnabled = true
-            isCameraEnabled = true
             rebuildParticipantTiles()
             state = .connected
         } catch {
@@ -111,6 +114,15 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
         }
     }
 
+    func applyMediaState() async {
+        do {
+            try await ensureLocalMediaPublished()
+            rebuildParticipantTiles()
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
     func disconnect() async {
         await room?.disconnect()
 
@@ -125,6 +137,71 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
         participantTiles = []
         chatMessages = []
         state = .idle
+    }
+
+    // MARK: - Resilience helpers
+
+    private func isLikelyExpiredToken(_ error: LiveKitError?) -> Bool {
+        guard let error else { return false }
+        let msg = (error.message ?? error.localizedDescription).lowercased()
+        if msg.contains("jwt") && msg.contains("exp") { return true }
+        if msg.contains("token") && msg.contains("expir") { return true }
+        if msg.contains("signature") && msg.contains("expired") { return true }
+        return false
+    }
+
+    private func ensureLocalMediaPublished() async throws {
+        guard let room else { return }
+
+        // Microphone
+        if isMicEnabled {
+            let hasMicPub = room.localParticipant.audioTracks.contains(where: { $0.source == .microphone })
+            if !hasMicPub {
+                let audio = localAudioTrack ?? LocalAudioTrack.createTrack()
+                localAudioTrack = audio
+                try await room.localParticipant.publish(audioTrack: audio)
+            } else {
+                try await room.localParticipant.setMicrophone(enabled: true)
+            }
+        } else {
+            try await room.localParticipant.setMicrophone(enabled: false)
+        }
+
+        // Camera
+        if isCameraEnabled {
+            let hasCamPub = room.localParticipant.videoTracks.contains(where: { $0.source == .camera })
+            if !hasCamPub {
+                let captureOptions: CameraCaptureOptions?
+                if let selectedCameraId,
+                   let dev = cameraDevices.first(where: { $0.id == selectedCameraId })?.device
+                {
+                    captureOptions = CameraCaptureOptions(device: dev, position: .unspecified)
+                } else {
+                    captureOptions = nil
+                }
+
+                if let pub = try await room.localParticipant.setCamera(enabled: true, captureOptions: captureOptions) {
+                    localVideoTrack = pub.track as? LocalVideoTrack
+                } else {
+                    let video = localVideoTrack ?? LocalVideoTrack.createCameraTrack()
+                    localVideoTrack = video
+                    try await room.localParticipant.publish(videoTrack: video)
+                }
+            } else {
+                try await room.localParticipant.setCamera(enabled: true)
+            }
+        } else {
+            try await room.localParticipant.setCamera(enabled: false)
+        }
+
+        // Screen share: best-effort republish if user had it enabled.
+        if isScreenSharing, let track = screenShareTrack {
+            let hasScreenPub = room.localParticipant.videoTracks.contains(where: { $0.source == .screenShareVideo })
+            if !hasScreenPub {
+                let pub = try await room.localParticipant.publish(videoTrack: track)
+                screenSharePublication = pub
+            }
+        }
     }
 
     // MARK: - Device selection
@@ -377,7 +454,66 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
     // MARK: - RoomDelegate
 
     nonisolated func room(_ room: Room, didUpdateConnectionState connectionState: ConnectionState, from oldConnectionState: ConnectionState) {
-        Task { @MainActor in rebuildParticipantTiles() }
+        Task { @MainActor in
+            self.connectionState = connectionState
+            switch connectionState {
+            case .connected:
+                if case .reconnecting = state { state = .connected }
+            case .reconnecting:
+                if case .connected = state { state = .reconnecting }
+            case .disconnected:
+                if case .idle = state { break }
+                if case .connecting = state { break }
+                if case .failed = state { break }
+                state = .disconnected(lastDisconnectError)
+            case .connecting:
+                break
+            @unknown default:
+                break
+            }
+            rebuildParticipantTiles()
+        }
+    }
+
+    nonisolated func room(_ room: Room, didStartReconnectWithMode reconnectMode: ReconnectMode) {
+        Task { @MainActor in
+            addSystemMessage("Reconnecting…")
+            state = .reconnecting
+        }
+    }
+
+    nonisolated func room(_ room: Room, didCompleteReconnectWithMode reconnectMode: ReconnectMode) {
+        Task { @MainActor in
+            do {
+                try await ensureLocalMediaPublished()
+            } catch {
+                lastDisconnectError = error.localizedDescription
+            }
+            addSystemMessage("Reconnected")
+            state = .connected
+            rebuildParticipantTiles()
+        }
+    }
+
+    nonisolated func room(_ room: Room, didFailToConnectWithError error: LiveKitError?) {
+        Task { @MainActor in
+            let msg = error?.message ?? error?.localizedDescription ?? "Failed to connect"
+            lastDisconnectError = msg
+            state = .failed(msg)
+        }
+    }
+
+    nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
+        Task { @MainActor in
+            let msg = error?.message ?? error?.localizedDescription
+            lastDisconnectError = msg
+            if isLikelyExpiredToken(error) {
+                state = .disconnected("Session expired. Please reconnect.")
+            } else {
+                state = .disconnected(msg)
+            }
+            rebuildParticipantTiles()
+        }
     }
 
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
