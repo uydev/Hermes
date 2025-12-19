@@ -1,5 +1,7 @@
 import SwiftUI
 import LiveKit
+import CoreGraphics
+import AppKit
 
 /// Lets the user pick a display or window to share (macOS 12.3+).
 struct ScreenSharePickerView: View {
@@ -63,6 +65,19 @@ struct ScreenSharePickerView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .textSelection(.enabled)
+
+                HStack(spacing: 10) {
+                    Button("Retry") {
+                        Task { await loadSources() }
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button("Open Screen Recording Settings") {
+                        openScreenRecordingSettings()
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.top, 6)
             }
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -122,16 +137,56 @@ struct ScreenSharePickerView: View {
 
         do {
             if #available(macOS 12.3, *) {
+                // ScreenCaptureKit is gated by the Screen Recording (TCC) permission.
+                // If the user previously clicked "Don't Allow", the only way to recover is:
+                // System Settings → Privacy & Security → Screen Recording → enable Hermes, then relaunch Hermes.
+                if !CGPreflightScreenCaptureAccess() {
+                    let granted = CGRequestScreenCaptureAccess()
+                    if !granted {
+                        errorMessage =
+                            "Screen Recording permission is not granted.\n\n" +
+                            "Go to System Settings → Privacy & Security → Screen Recording, enable “Hermes”, then quit and relaunch Hermes.\n\n" +
+                            "If you see multiple Hermes entries, enable the one that matches the app you’re running."
+                        isLoading = false
+                        return
+                    }
+
+                    // Give TCC a moment to apply before querying shareable content.
+                    try? await Task.sleep(nanoseconds: 350_000_000)
+                }
+
                 displays = try await MacOSScreenCapturer.displaySources()
                 windows = try await MacOSScreenCapturer.windowSources()
             } else {
                 errorMessage = "Screen sharing requires macOS 12.3 or later."
             }
         } catch {
-            errorMessage = error.localizedDescription
+            // Provide a more actionable message for the common TCC denial case.
+            let msg = error.localizedDescription
+            if msg.lowercased().contains("declined tcc") || msg.lowercased().contains("tcc") {
+                errorMessage =
+                    "\(msg)\n\n" +
+                    "Go to System Settings → Privacy & Security → Screen Recording, enable “Hermes”, then quit and relaunch Hermes."
+            } else {
+                errorMessage = msg
+            }
         }
 
         isLoading = false
+    }
+
+    private func openScreenRecordingSettings() {
+        // Apple doesn’t guarantee deep links across macOS releases, so we try a couple.
+        let candidates: [String] = [
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity?Privacy_ScreenCapture",
+        ]
+        for s in candidates {
+            if let url = URL(string: s) {
+                NSWorkspace.shared.open(url)
+                return
+            }
+        }
     }
 }
 
