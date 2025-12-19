@@ -20,6 +20,29 @@ final class BackendClient {
     init(baseUrl: URL) {
         self.baseUrl = baseUrl
     }
+    
+    /// Convenience initializer that reads backend URL from build configuration or uses default
+    convenience init() {
+        // Read from Info.plist build setting, or use default
+        let urlString: String
+        
+        if let configUrl = Bundle.main.object(forInfoDictionaryKey: "BackendURL") as? String,
+           !configUrl.isEmpty {
+            urlString = configUrl
+        } else {
+            // Default: localhost for development
+            urlString = "http://127.0.0.1:3001"
+        }
+        
+        // Ensure URL ends with / for proper path appending
+        let normalizedUrl = urlString.hasSuffix("/") ? urlString : "\(urlString)/"
+        
+        guard let url = URL(string: normalizedUrl) else {
+            fatalError("Invalid BackendURL in Info.plist: \(normalizedUrl)")
+        }
+        
+        self.init(baseUrl: url)
+    }
 
     struct GuestAuthRequest: Codable {
         let displayName: String

@@ -18,8 +18,8 @@ struct MeetingShellView: View {
     @FocusState private var focusedField: FocusField?
     @State private var layoutMode: LayoutMode = .stage
 
-    // Local backend (use IPv4 loopback to avoid macOS preferring ::1 when server isn't bound on IPv6)
-    private let backend = BackendClient(baseUrl: URL(string: "http://127.0.0.1:3001/")!)
+    // Backend client uses configurable URL from build settings or defaults to localhost
+    private let backend = BackendClient()
 
     enum FocusField: Hashable {
         case chatInput
