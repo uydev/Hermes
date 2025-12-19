@@ -14,9 +14,14 @@ struct MeetingShellView: View {
     @State private var stagedTileId: String? = nil
     @State private var isRecovering: Bool = false
     @State private var recoveryError: String?
+    @FocusState private var focusedField: FocusField?
 
     // Local backend (use IPv4 loopback to avoid macOS preferring ::1 when server isn't bound on IPv6)
     private let backend = BackendClient(baseUrl: URL(string: "http://127.0.0.1:3001/")!)
+
+    enum FocusField: Hashable {
+        case chatInput
+    }
 
     enum SidebarTab: String, CaseIterable {
         case participants = "Participants"
@@ -49,10 +54,51 @@ struct MeetingShellView: View {
             }
         }
         .toolbar(.hidden)
+        .focusedValue(\.meetingCommandActions, meetingActions)
         .task(id: meetingStore.roomJoin?.liveKitToken) {
             guard let join = meetingStore.roomJoin else { return }
             await liveKit.connectIfNeeded(join: join)
         }
+    }
+
+    private var meetingActions: MeetingCommandActions {
+        MeetingCommandActions(
+            toggleMic: { Task { await liveKit.toggleMic() } },
+            toggleCamera: { Task { await liveKit.toggleCamera() } },
+            toggleScreenShare: {
+                if liveKit.isScreenSharing {
+                    Task { await liveKit.stopScreenShare() }
+                } else {
+                    isScreenSharePickerPresented = true
+                }
+            },
+            toggleSidebar: {
+                withAnimation(.snappy(duration: 0.18)) {
+                    isSidebarVisible.toggle()
+                }
+            },
+            showDeviceSettings: {
+                isDeviceSettingsPresented = true
+            },
+            focusChat: {
+                withAnimation(.snappy(duration: 0.18)) {
+                    isSidebarVisible = true
+                }
+                sidebarSelection = .chat
+                focusedField = .chatInput
+            },
+            showParticipants: {
+                withAnimation(.snappy(duration: 0.18)) {
+                    isSidebarVisible = true
+                }
+                sidebarSelection = .participants
+            },
+            leaveMeeting: {
+                Task { await liveKit.disconnect() }
+                meetingStore.clear()
+                sessionStore.signOut()
+            }
+        )
     }
 
     private var topBar: some View {
@@ -519,6 +565,7 @@ struct MeetingShellView: View {
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...4)
                     .submitLabel(.send)
+                    .focused($focusedField, equals: .chatInput)
                     .onSubmit {
                         let text = chatDraft
                         chatDraft = ""

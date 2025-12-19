@@ -15,8 +15,10 @@ struct ContentView: View {
         NavigationStack {
             if meetingStore.roomJoin != nil {
                 MeetingShellView()
+                    .background(WindowConfigurator(minSize: CGSize(width: 980, height: 640)))
             } else {
                 JoinView()
+                    .background(WindowConfigurator(minSize: CGSize(width: 520, height: 360)))
             }
         }
     }

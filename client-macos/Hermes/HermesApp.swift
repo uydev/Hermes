@@ -18,5 +18,8 @@ struct HermesApp: App {
                 .environmentObject(sessionStore)
                 .environmentObject(meetingStore)
         }
+        .commands {
+            MeetingCommands()
+        }
     }
 }

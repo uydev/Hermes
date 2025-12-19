@@ -54,6 +54,7 @@ struct JoinView: View {
                         Text("Join")
                     }
                 }
+                .keyboardShortcut(.defaultAction)
                 .disabled(isLoading || displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || room.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 Spacer()
