@@ -8,9 +8,16 @@ struct JoinView: View {
     @State private var room: String = ""
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @FocusState private var focusedField: FocusField?
 
     // Local backend (use IPv4 loopback to avoid macOS preferring ::1 when server isn't bound on IPv6)
     private let backend = BackendClient(baseUrl: URL(string: "http://127.0.0.1:3001/")!)
+
+    enum FocusField: Hashable {
+        case displayName
+        case room
+        case joinButton
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -28,6 +35,11 @@ struct JoinView: View {
 
                 TextField("Ada", text: $displayName)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .displayName)
+                    .submitLabel(.next)
+                    .onSubmit {
+                        focusedField = .room
+                    }
 
                 Text("Room code")
                     .font(.caption)
@@ -36,6 +48,11 @@ struct JoinView: View {
 
                 TextField("demo-room", text: $room)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .room)
+                    .submitLabel(.go)
+                    .onSubmit {
+                        Task { await join() }
+                    }
             }
 
             if let errorMessage {
@@ -55,6 +72,8 @@ struct JoinView: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction)
+                .focused($focusedField, equals: .joinButton)
+                .focusable(true)
                 .disabled(isLoading || displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || room.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 Spacer()
@@ -65,6 +84,11 @@ struct JoinView: View {
         }
         .padding(20)
         .frame(minWidth: 420, minHeight: 320)
+        .onAppear {
+            if focusedField == nil {
+                focusedField = .displayName
+            }
+        }
     }
 
     @MainActor

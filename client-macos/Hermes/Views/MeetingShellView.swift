@@ -15,6 +15,7 @@ struct MeetingShellView: View {
     @State private var isRecovering: Bool = false
     @State private var recoveryError: String?
     @FocusState private var focusedField: FocusField?
+    @State private var layoutMode: LayoutMode = .stage
 
     // Local backend (use IPv4 loopback to avoid macOS preferring ::1 when server isn't bound on IPv6)
     private let backend = BackendClient(baseUrl: URL(string: "http://127.0.0.1:3001/")!)
@@ -26,6 +27,11 @@ struct MeetingShellView: View {
     enum SidebarTab: String, CaseIterable {
         case participants = "Participants"
         case chat = "Chat"
+    }
+
+    enum LayoutMode: String, CaseIterable {
+        case stage = "Stage"
+        case gallery = "Gallery"
     }
 
     var body: some View {
@@ -113,6 +119,16 @@ struct MeetingShellView: View {
             }
 
             Spacer()
+
+            Button {
+                withAnimation(.snappy(duration: 0.18)) {
+                    layoutMode = (layoutMode == .stage) ? .gallery : .stage
+                }
+            } label: {
+                Label("Layout", systemImage: layoutMode == .stage ? "square.grid.2x2" : "rectangle.on.rectangle")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.borderless)
 
             Button {
                 withAnimation(.snappy(duration: 0.18)) {
@@ -313,10 +329,10 @@ struct MeetingShellView: View {
 
     private var participantsGrid: some View {
         Group {
-            if let stage = stageTile {
-                stageLayout(stage: stage)
-            } else {
+            if layoutMode == .gallery {
                 galleryGrid
+            } else {
+                stageLayout(stage: stageTileAny ?? (liveKit.participantTiles.first ?? placeholderTile))
             }
         }
         .onChange(of: liveKit.participantTiles.map { $0.id }) { _, ids in
@@ -324,6 +340,20 @@ struct MeetingShellView: View {
                 stagedTileId = nil
             }
         }
+    }
+
+    private var placeholderTile: ParticipantTile {
+        ParticipantTile(
+            id: "placeholder",
+            identity: "placeholder",
+            displayName: "Connecting…",
+            isLocal: true,
+            kind: .camera,
+            videoTrack: nil,
+            isSpeaking: false,
+            isMicEnabled: false,
+            isCameraEnabled: false
+        )
     }
 
     private var galleryGrid: some View {
@@ -342,14 +372,33 @@ struct MeetingShellView: View {
         liveKit.participantTiles.filter { $0.kind == .screenShare }
     }
 
-    private var stageTile: ParticipantTile? {
-        guard !screenShareTiles.isEmpty else { return nil }
-        if let stagedTileId,
-           let pinned = screenShareTiles.first(where: { $0.id == stagedTileId })
-        {
+    private var stageTileAny: ParticipantTile? {
+        let tiles = liveKit.participantTiles
+        if tiles.isEmpty { return nil }
+
+        // 1) If user pinned a tile, use it.
+        if let stagedTileId, let pinned = tiles.first(where: { $0.id == stagedTileId }) {
             return pinned
         }
-        return screenShareTiles.first
+
+        // 2) Screen share always wins if present.
+        if let share = tiles.first(where: { $0.kind == .screenShare }) {
+            return share
+        }
+
+        // 3) Active speaker (camera tiles), prefer remote.
+        if let speaker = tiles.first(where: { $0.kind == .camera && $0.isSpeaking && !$0.isLocal }) {
+            return speaker
+        }
+        if let speaker = tiles.first(where: { $0.kind == .camera && $0.isSpeaking }) {
+            return speaker
+        }
+
+        // 4) Otherwise local camera, else first.
+        if let local = tiles.first(where: { $0.isLocal && $0.kind == .camera }) {
+            return local
+        }
+        return tiles.first
     }
 
     private func stageLayout(stage: ParticipantTile) -> some View {
@@ -357,30 +406,35 @@ struct MeetingShellView: View {
 
         return VStack(spacing: 12) {
             ParticipantTileView(tile: stage)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .padding(.horizontal, 14)
                 .padding(.top, 14)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    // Double-tap stage to unpin.
+                    stagedTileId = nil
+                }
 
-            Divider()
-                .padding(.horizontal, 14)
+            if !thumbnails.isEmpty {
+                Divider()
+                    .padding(.horizontal, 14)
 
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: 12) {
-                    ForEach(thumbnails, id: \.id) { tile in
-                        ParticipantTileView(tile: tile)
-                            .frame(width: 220)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if tile.kind == .screenShare {
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 12) {
+                        ForEach(thumbnails, id: \.id) { tile in
+                            ParticipantTileView(tile: tile)
+                                .frame(width: 220)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
                                     stagedTileId = tile.id
                                 }
-                            }
+                        }
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 14)
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 14)
+                .scrollIndicators(.visible)
             }
-            .scrollIndicators(.visible)
         }
     }
 
