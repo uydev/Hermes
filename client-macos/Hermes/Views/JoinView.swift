@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct JoinView: View {
     @EnvironmentObject private var sessionStore: SessionStore
@@ -20,73 +21,97 @@ struct JoinView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Hermes")
-                .font(.largeTitle)
-                .bold()
+        ZStack {
+            // Force a real background + primary foreground so text can't disappear due to
+            // accidental global styles, transparency, or vibrancy issues.
+            Color(nsColor: .windowBackgroundColor)
+                .ignoresSafeArea()
 
-            Text("Join a room as a guest")
-                .foregroundStyle(.secondary)
+            VStack(spacing: 16) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 72, height: 72)
+                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                    .padding(.bottom, 6)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Display name")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                VStack(spacing: 6) {
+                    Text("Hermes")
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                    Text("Join a room as a guest")
+                        .foregroundStyle(.secondary)
+                }
 
-                TextField("Ada", text: $displayName)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .displayName)
-                    .submitLabel(.next)
-                    .onSubmit {
-                        focusedField = .room
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Display name")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        TextField("Ada", text: $displayName)
+                            .textFieldStyle(.roundedBorder)
+                            .focused($focusedField, equals: .displayName)
+                            .submitLabel(.next)
+                            .disabled(isLoading)
+                            .onSubmit { focusedField = .room }
                     }
 
-                Text("Room code")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Room code")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
 
-                TextField("demo-room", text: $room)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .room)
-                    .submitLabel(.go)
-                    .onSubmit {
-                        Task { await join() }
-                    }
-            }
-
-            if let errorMessage {
-                Text(errorMessage)
-                    .foregroundStyle(.red)
-            }
-
-            HStack {
-                Button {
-                    Task { await join() }
-                } label: {
-                    if isLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Text("Join")
+                        TextField("demo-room", text: $room)
+                            .textFieldStyle(.roundedBorder)
+                            .focused($focusedField, equals: .room)
+                            .submitLabel(.go)
+                            .disabled(isLoading)
+                            .onSubmit { Task { await join() } }
                     }
                 }
-                .keyboardShortcut(.defaultAction)
-                .focused($focusedField, equals: .joinButton)
-                .focusable(true)
-                .disabled(isLoading || displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || room.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .controlSize(.large)
+                .frame(maxWidth: 420)
 
-                Spacer()
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: 420, alignment: .leading)
+                }
+
+                HStack {
+                    Spacer()
+
+                    Button {
+                        Task { await join() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isLoading {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text(isLoading ? "Joining…" : "Join")
+                                .fontWeight(.semibold)
+                        }
+                        .frame(minWidth: 96)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .focused($focusedField, equals: .joinButton)
+                    .focusable(true)
+                    .disabled(isLoading || displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || room.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .frame(maxWidth: 420)
+
+                Spacer(minLength: 0)
             }
-            .padding(.top, 8)
-
-            Spacer()
-        }
-        .padding(20)
-        .frame(minWidth: 420, minHeight: 320)
-        .onAppear {
-            if focusedField == nil {
-                focusedField = .displayName
+            .foregroundStyle(.primary)
+            .padding(24)
+            .frame(minWidth: 520, minHeight: 360, alignment: .top)
+            .onAppear {
+                if focusedField == nil {
+                    focusedField = .displayName
+                }
             }
         }
     }

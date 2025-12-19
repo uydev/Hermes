@@ -24,6 +24,11 @@ struct WindowConfigurator: NSViewRepresentable {
     private func apply(to view: NSView) {
         guard let window = view.window else { return }
 
+        // Ensure predictable contrast. If the window is left "transparent" or
+        // ends up with unusual vibrancy, SwiftUI text can become effectively invisible.
+        window.isOpaque = true
+        window.backgroundColor = .windowBackgroundColor
+
         // Sizing
         window.minSize = minSize
 

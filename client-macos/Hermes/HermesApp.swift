@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 @main
 struct HermesApp: App {
@@ -21,7 +22,16 @@ struct HermesApp: App {
                 .environmentObject(commandCenter)
         }
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Hermes") {
+                    showAboutHermes()
+                }
+            }
             MeetingCommands(commandCenter: commandCenter)
         }
+    }
+
+    private func showAboutHermes() {
+        AboutHermesWindowController.shared.show()
     }
 }
