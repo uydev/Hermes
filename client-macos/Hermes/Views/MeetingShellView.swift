@@ -8,6 +8,7 @@ struct MeetingShellView: View {
 
     @State private var sidebarSelection: SidebarTab = .participants
     @State private var isSidebarVisible: Bool = true
+    @State private var chatDraft: String = ""
 
     enum SidebarTab: String, CaseIterable {
         case participants = "Participants"
@@ -90,19 +91,7 @@ struct MeetingShellView: View {
                         }
                         .padding(24)
                     case .connected:
-                        if let track = liveKit.localVideoTrack {
-                            LiveKitVideoView(track: track)
-                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        } else {
-                            VStack(spacing: 8) {
-                                Image(systemName: "video.slash")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(.secondary)
-                                Text("Camera not available")
-                                    .font(.headline)
-                            }
-                            .padding(24)
-                        }
+                        participantsGrid
                     case .failed(let message):
                         VStack(spacing: 10) {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -134,6 +123,18 @@ struct MeetingShellView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var participantsGrid: some View {
+        ScrollView {
+            let cols = [GridItem(.adaptive(minimum: 280, maximum: 520), spacing: 14)]
+            LazyVGrid(columns: cols, spacing: 14) {
+                ForEach(liveKit.participantTiles, id: \.id) { (tile: ParticipantTile) in
+                    ParticipantTileView(tile: tile)
+                }
+            }
+            .padding(14)
+        }
     }
 
     private var bottomBar: some View {
@@ -216,10 +217,16 @@ struct MeetingShellView: View {
                 .padding(.horizontal, 12)
 
             List {
-                if let join = meetingStore.roomJoin {
-                    Label("\(join.displayName) (You)", systemImage: "person.fill")
-                } else {
-                    Text("No session")
+                ForEach(liveKit.participantTiles, id: \.id) { (tile: ParticipantTile) in
+                    HStack(spacing: 10) {
+                        Image(systemName: tile.isLocal ? "person.fill" : "person")
+                        Text(tile.isLocal ? "\(tile.displayName) (You)" : tile.displayName)
+                        Spacer()
+                        Image(systemName: tile.isMicEnabled ? "mic.fill" : "mic.slash.fill")
+                            .foregroundStyle(tile.isMicEnabled ? Color.secondary : Color.red)
+                        Image(systemName: tile.isCameraEnabled ? "video.fill" : "video.slash.fill")
+                            .foregroundStyle(tile.isCameraEnabled ? Color.secondary : Color.red)
+                    }
                 }
             }
             .listStyle(.inset)
@@ -227,19 +234,44 @@ struct MeetingShellView: View {
     }
 
     private var chatPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Chat")
-                .font(.headline)
-                .padding(.top, 12)
-                .padding(.horizontal, 12)
+        VStack(spacing: 0) {
+            HStack {
+                Text("Chat")
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.top, 12)
+            .padding(.horizontal, 12)
 
-            Spacer()
+            List {
+                ForEach(liveKit.chatMessages, id: \.id) { (msg: ChatMessage) in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(msg.isLocal ? "You" : msg.sender)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(msg.text)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .listStyle(.inset)
 
-            Text("Chat comes in Phase 3")
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
+            Divider()
 
-            Spacer()
+            HStack(spacing: 8) {
+                TextField("Message", text: $chatDraft, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...4)
+
+                Button("Send") {
+                    let text = chatDraft
+                    chatDraft = ""
+                    Task { await liveKit.sendChat(text: text) }
+                }
+                .disabled(chatDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(12)
         }
     }
 }
