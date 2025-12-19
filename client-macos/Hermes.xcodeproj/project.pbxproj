@@ -14,9 +14,22 @@
 		04C214C92EF49BD2001DAEC6 /* Hermes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Hermes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0486D7BF2EF5E9D5002D2521 /* Exceptions for "Hermes" folder in "Hermes" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 04C214C82EF49BD2001DAEC6 /* Hermes */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		04C214CB2EF49BD2001DAEC6 /* Hermes */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0486D7BF2EF5E9D5002D2521 /* Exceptions for "Hermes" folder in "Hermes" target */,
+			);
 			path = Hermes;
 			sourceTree = "<group>";
 		};
@@ -275,6 +288,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Hermes/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Hermes needs camera access for video calls.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hermes needs microphone access for audio calls.";
@@ -318,6 +332,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Hermes/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Hermes needs camera access for video calls.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hermes needs microphone access for audio calls.";
