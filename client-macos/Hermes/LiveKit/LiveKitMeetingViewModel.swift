@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import LiveKit
+import AVFoundation
 
 @MainActor
 final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
@@ -22,6 +23,15 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
 
     @Published private(set) var participantTiles: [ParticipantTile] = []
     @Published private(set) var chatMessages: [ChatMessage] = []
+
+    // MARK: - Devices
+    @Published private(set) var cameraDevices: [CameraDeviceOption] = []
+    @Published private(set) var micDevices: [AudioDevice] = []
+    @Published private(set) var speakerDevices: [AudioDevice] = []
+
+    @Published private(set) var selectedCameraId: String?
+    @Published private(set) var selectedMicId: String?
+    @Published private(set) var selectedSpeakerId: String?
 
     @Published private(set) var isScreenSharing: Bool = false
     private var screenSharePublication: LocalTrackPublication?
@@ -115,6 +125,68 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
         participantTiles = []
         chatMessages = []
         state = .idle
+    }
+
+    // MARK: - Device selection
+
+    func refreshDevices() async {
+        // Camera devices (AVFoundation)
+        do {
+            let devices = try await CameraCapturer.captureDevices()
+            cameraDevices = devices.map { CameraDeviceOption(device: $0) }
+
+            // Pick current device if known
+            if let current = localVideoTrack?.capturer as? CameraCapturer,
+               let device = current.device
+            {
+                selectedCameraId = device.uniqueID
+            } else if selectedCameraId == nil {
+                selectedCameraId = cameraDevices.first?.id
+            }
+        } catch {
+            // Best-effort: leave list empty
+            cameraDevices = []
+        }
+
+        // Audio devices (LiveKit)
+        micDevices = AudioManager.shared.inputDevices
+        speakerDevices = AudioManager.shared.outputDevices
+        selectedMicId = AudioManager.shared.inputDevice.deviceId
+        selectedSpeakerId = AudioManager.shared.outputDevice.deviceId
+    }
+
+    func selectCamera(deviceId: String) async {
+        guard let dev = cameraDevices.first(where: { $0.id == deviceId })?.device else { return }
+        selectedCameraId = deviceId
+
+        guard let room else { return }
+        do {
+            // Force recreate camera track with specific device.
+            if let pub = room.localParticipant.localVideoTracks.first(where: { $0.source == .camera }) {
+                try await room.localParticipant.unpublish(publication: pub)
+            }
+
+            let captureOptions = CameraCaptureOptions(device: dev, position: .unspecified)
+            if let pub = try await room.localParticipant.setCamera(enabled: true, captureOptions: captureOptions) {
+                localVideoTrack = pub.track as? LocalVideoTrack
+                isCameraEnabled = true
+                rebuildParticipantTiles()
+            }
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    func selectMicrophone(deviceId: String) async {
+        guard let dev = micDevices.first(where: { $0.deviceId == deviceId }) else { return }
+        selectedMicId = deviceId
+        AudioManager.shared.inputDevice = dev
+    }
+
+    func selectSpeaker(deviceId: String) async {
+        guard let dev = speakerDevices.first(where: { $0.deviceId == deviceId }) else { return }
+        selectedSpeakerId = deviceId
+        AudioManager.shared.outputDevice = dev
     }
 
     // MARK: - Screen share (macOS)

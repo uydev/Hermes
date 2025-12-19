@@ -10,6 +10,7 @@ struct MeetingShellView: View {
     @State private var isSidebarVisible: Bool = true
     @State private var chatDraft: String = ""
     @State private var isScreenSharePickerPresented: Bool = false
+    @State private var isDeviceSettingsPresented: Bool = false
 
     enum SidebarTab: String, CaseIterable {
         case participants = "Participants"
@@ -162,6 +163,16 @@ struct MeetingShellView: View {
                 }
             }
 
+            Button {
+                isDeviceSettingsPresented = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 14, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.bordered)
+
             Spacer()
 
             Button(role: .destructive) {
@@ -189,6 +200,9 @@ struct MeetingShellView: View {
                     Task { await liveKit.startScreenShare(source: source) }
                 }
             }
+        }
+        .sheet(isPresented: $isDeviceSettingsPresented) {
+            DeviceSettingsView(liveKit: liveKit)
         }
     }
 
