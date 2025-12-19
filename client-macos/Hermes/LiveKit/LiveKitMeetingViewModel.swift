@@ -79,6 +79,7 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
             let enable = !isMicEnabled
             try await room.localParticipant.setMicrophone(enabled: enable)
             isMicEnabled = enable
+            rebuildParticipantTiles()
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -90,6 +91,7 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
             let enable = !isCameraEnabled
             try await room.localParticipant.setCamera(enabled: enable)
             isCameraEnabled = enable
+            rebuildParticipantTiles()
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -138,13 +140,17 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
             let identity = participant.identity?.stringValue ?? participant.sid?.stringValue ?? "unknown"
             let name = participant.name ?? identity
 
-            // Pick first subscribed video track (MVP)
-            let videoTrack: VideoTrack? = participant.videoTracks
-                .compactMap { $0.track as? VideoTrack }
-                .first
+            // Prefer first subscribed tracks (MVP).
+            // Also reflect mute state if available.
+            let videoPub = participant.videoTracks.first(where: { $0.track != nil })
+            let audioPub = participant.audioTracks.first(where: { $0.track != nil })
 
-            let micEnabled = participant.audioTracks.contains { $0.track != nil }
-            let camEnabled = participant.videoTracks.contains { $0.track != nil }
+            let videoTrack = videoPub?.track as? VideoTrack
+            let isVideoMuted = (videoPub?.isMuted ?? (videoTrack == nil))
+            let isAudioMuted = (audioPub?.isMuted ?? (audioPub?.track == nil))
+
+            let camEnabled = videoTrack != nil && !isVideoMuted
+            let micEnabled = audioPub?.track != nil && !isAudioMuted
 
             tiles.append(
                 ParticipantTile(
@@ -178,10 +184,14 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
         do {
             let options = DataPublishOptions(topic: "chat", reliable: true)
             try await room.localParticipant.publish(data: data, options: options)
-            chatMessages.append(ChatMessage(id: UUID(), sender: sender, text: trimmed, timestamp: Date(), isLocal: true))
+            chatMessages.append(ChatMessage(id: UUID(), kind: .user, sender: sender, text: trimmed, timestamp: Date(), isLocal: true))
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    private func addSystemMessage(_ text: String) {
+        chatMessages.append(ChatMessage(id: UUID(), kind: .system, sender: "System", text: text, timestamp: Date(), isLocal: false))
     }
 
     // MARK: - RoomDelegate
@@ -191,11 +201,19 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
     }
 
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
-        Task { @MainActor in rebuildParticipantTiles() }
+        Task { @MainActor in
+            let name = participant.name ?? participant.identity?.stringValue ?? "Participant"
+            addSystemMessage("\(name) joined")
+            rebuildParticipantTiles()
+        }
     }
 
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
-        Task { @MainActor in rebuildParticipantTiles() }
+        Task { @MainActor in
+            let name = participant.name ?? participant.identity?.stringValue ?? "Participant"
+            addSystemMessage("\(name) left")
+            rebuildParticipantTiles()
+        }
     }
 
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
@@ -210,13 +228,13 @@ final class LiveKitMeetingViewModel: ObservableObject, RoomDelegate {
         guard topic == "chat" else { return }
         Task { @MainActor in
             if let wire = try? JSONDecoder().decode(ChatWireMessage.self, from: data), wire.type == "chat" {
-                chatMessages.append(ChatMessage(id: UUID(), sender: wire.sender, text: wire.text, timestamp: Date(timeIntervalSince1970: wire.ts), isLocal: false))
+                chatMessages.append(ChatMessage(id: UUID(), kind: .user, sender: wire.sender, text: wire.text, timestamp: Date(timeIntervalSince1970: wire.ts), isLocal: false))
                 return
             }
 
             let sender = participant?.name ?? participant?.identity?.stringValue ?? "Participant"
             let text = String(data: data, encoding: .utf8) ?? "<binary data>"
-            chatMessages.append(ChatMessage(id: UUID(), sender: sender, text: text, timestamp: Date(), isLocal: false))
+            chatMessages.append(ChatMessage(id: UUID(), kind: .user, sender: sender, text: text, timestamp: Date(), isLocal: false))
         }
     }
 }

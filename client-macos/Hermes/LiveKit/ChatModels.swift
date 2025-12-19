@@ -1,7 +1,13 @@
 import Foundation
 
+enum ChatMessageKind: String, Codable, Equatable {
+    case user
+    case system
+}
+
 struct ChatMessage: Identifiable, Equatable {
     let id: UUID
+    let kind: ChatMessageKind
     let sender: String
     let text: String
     let timestamp: Date

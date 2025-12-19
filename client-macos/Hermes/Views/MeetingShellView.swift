@@ -243,18 +243,39 @@ struct MeetingShellView: View {
             .padding(.top, 12)
             .padding(.horizontal, 12)
 
-            List {
-                ForEach(liveKit.chatMessages, id: \.id) { (msg: ChatMessage) in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(msg.isLocal ? "You" : msg.sender)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(msg.text)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(liveKit.chatMessages, id: \.id) { (msg: ChatMessage) in
+                            if msg.kind == .system {
+                                Text(msg.text)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 6)
+                            } else {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(msg.isLocal ? "You" : msg.sender)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(msg.text)
+                                }
+                                .padding(.vertical, 4)
+                                .padding(.horizontal, 10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 10)
+                }
+                .onChange(of: liveKit.chatMessages.count) { _, _ in
+                    if let last = liveKit.chatMessages.last {
+                        withAnimation(.snappy(duration: 0.18)) {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
                 }
             }
-            .listStyle(.inset)
 
             Divider()
 
@@ -262,6 +283,12 @@ struct MeetingShellView: View {
                 TextField("Message", text: $chatDraft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...4)
+                    .submitLabel(.send)
+                    .onSubmit {
+                        let text = chatDraft
+                        chatDraft = ""
+                        Task { await liveKit.sendChat(text: text) }
+                    }
 
                 Button("Send") {
                     let text = chatDraft
