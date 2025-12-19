@@ -61,16 +61,42 @@ fi
 
 OUT_APP="$DIST_DIR/$APP_NAME.app"
 OUT_ZIP="$DIST_DIR/$APP_NAME-macos.zip"
+OUT_DMG="$DIST_DIR/$APP_NAME-macos.dmg"
+DMG_TEMP_DIR="$DIST_DIR/dmg-temp"
 
-echo "[2/3] Copying .app to dist/…"
-rm -rf "$OUT_APP" "$OUT_ZIP"
+echo "[2/4] Copying .app to dist/…"
+rm -rf "$OUT_APP" "$OUT_ZIP" "$OUT_DMG" "$DMG_TEMP_DIR"
 cp -R "$APP_PATH" "$OUT_APP"
 
-echo "[3/3] Creating zip…"
+echo "[3/4] Creating zip…"
 (cd "$DIST_DIR" && ditto -c -k --sequesterRsrc --keepParent "$APP_NAME.app" "$APP_NAME-macos.zip")
 
-echo "Done:"
+echo "[4/4] Creating DMG…"
+mkdir -p "$DMG_TEMP_DIR"
+cp -R "$OUT_APP" "$DMG_TEMP_DIR/"
+
+# Create Applications symlink
+ln -s /Applications "$DMG_TEMP_DIR/Applications"
+
+# Calculate DMG size (app size + 100MB overhead)
+APP_SIZE=$(du -sm "$OUT_APP" | cut -f1)
+DMG_SIZE=$((APP_SIZE + 100))
+
+# Create DMG
+hdiutil create -volname "$APP_NAME" \
+  -srcfolder "$DMG_TEMP_DIR" \
+  -ov -format UDZO \
+  -fs HFS+ \
+  -size "${DMG_SIZE}m" \
+  "$OUT_DMG"
+
+# Clean up temp directory
+rm -rf "$DMG_TEMP_DIR"
+
+echo ""
+echo "✅ Done:"
 echo "- $OUT_APP"
 echo "- $OUT_ZIP"
-
+echo "- $OUT_DMG"
+echo ""
 echo "Note: This build is signed if your Xcode signing is configured."
