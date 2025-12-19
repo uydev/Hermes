@@ -284,18 +284,19 @@ struct MeetingShellView: View {
                 }
                 .padding(20)
 
-            if let join = meetingStore.roomJoin {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("LiveKit URL: \(join.liveKitUrl)")
-                    Text("Identity: \(join.identity)")
-                    Text("Name: \(join.displayName)")
-                    Text("Role: \(join.role)")
-                }
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
-            }
+            // Debug info commented out - not needed in UI
+            // if let join = meetingStore.roomJoin {
+            //     VStack(alignment: .leading, spacing: 6) {
+            //         Text("LiveKit URL: \(join.liveKitUrl)")
+            //         Text("Identity: \(join.identity)")
+            //         Text("Name: \(join.displayName)")
+            //         Text("Role: \(join.role)")
+            //     }
+            //     .font(.system(.caption, design: .monospaced))
+            //     .foregroundStyle(.secondary)
+            //     .padding(.horizontal, 20)
+            //     .padding(.bottom, 8)
+            // }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

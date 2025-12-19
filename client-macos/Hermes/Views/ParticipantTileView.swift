@@ -5,7 +5,9 @@ struct ParticipantTileView: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            if let track = tile.videoTrack {
+            // Show video only if camera is enabled AND track exists
+            // Otherwise blank out and show name
+            if let track = tile.videoTrack, tile.isCameraEnabled {
                 LiveKitVideoView(track: track)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             } else {
