@@ -3,6 +3,7 @@ import SwiftUI
 struct MeetingShellView: View {
     @EnvironmentObject private var sessionStore: SessionStore
     @EnvironmentObject private var meetingStore: MeetingStore
+    @EnvironmentObject private var commandCenter: MeetingCommandCenter
 
     @StateObject private var liveKit = LiveKitMeetingViewModel()
 
@@ -60,7 +61,24 @@ struct MeetingShellView: View {
             }
         }
         .toolbar(.hidden)
-        .focusedValue(\.meetingCommandActions, meetingActions)
+        .onAppear {
+            commandCenter.actions = meetingActions
+        }
+        .onChange(of: liveKit.isScreenSharing) { _, _ in
+            // Keep actions closures up-to-date with current state.
+            commandCenter.actions = meetingActions
+        }
+        .onChange(of: isSidebarVisible) { _, _ in
+            commandCenter.actions = meetingActions
+        }
+        .onChange(of: sidebarSelection) { _, _ in
+            commandCenter.actions = meetingActions
+        }
+        .onDisappear {
+            if commandCenter.actions != nil {
+                commandCenter.actions = nil
+            }
+        }
         .task(id: meetingStore.roomJoin?.liveKitToken) {
             guard let join = meetingStore.roomJoin else { return }
             await liveKit.connectIfNeeded(join: join)
@@ -103,6 +121,7 @@ struct MeetingShellView: View {
                 Task { await liveKit.disconnect() }
                 meetingStore.clear()
                 sessionStore.signOut()
+                commandCenter.actions = nil
             }
         )
     }

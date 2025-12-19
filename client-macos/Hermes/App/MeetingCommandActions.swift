@@ -10,14 +10,3 @@ struct MeetingCommandActions {
     let showParticipants: () -> Void
     let leaveMeeting: () -> Void
 }
-
-private struct MeetingCommandActionsKey: FocusedValueKey {
-    typealias Value = MeetingCommandActions
-}
-
-extension FocusedValues {
-    var meetingCommandActions: MeetingCommandActions? {
-        get { self[MeetingCommandActionsKey.self] }
-        set { self[MeetingCommandActionsKey.self] = newValue }
-    }
-}

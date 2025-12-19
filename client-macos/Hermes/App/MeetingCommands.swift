@@ -1,63 +1,63 @@
 import SwiftUI
 
 struct MeetingCommands: Commands {
-    @FocusedValue(\.meetingCommandActions) private var meeting
+    @ObservedObject var commandCenter: MeetingCommandCenter
 
     var body: some Commands {
         CommandMenu("Meeting") {
             Button("Mute / Unmute") {
-                meeting?.toggleMic()
+                commandCenter.actions?.toggleMic()
             }
-            .keyboardShortcut("m", modifiers: [])
-            .disabled(meeting == nil)
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+            .disabled(commandCenter.actions == nil)
 
             Button("Start / Stop Video") {
-                meeting?.toggleCamera()
+                commandCenter.actions?.toggleCamera()
             }
-            .keyboardShortcut("v", modifiers: [])
-            .disabled(meeting == nil)
+            .keyboardShortcut("v", modifiers: [.command, .shift])
+            .disabled(commandCenter.actions == nil)
 
             Divider()
 
             Button("Share Screen…") {
-                meeting?.toggleScreenShare()
+                commandCenter.actions?.toggleScreenShare()
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])
-            .disabled(meeting == nil)
+            .disabled(commandCenter.actions == nil)
 
             Button("Audio & Video Settings…") {
-                meeting?.showDeviceSettings()
+                commandCenter.actions?.showDeviceSettings()
             }
             .keyboardShortcut(",", modifiers: [.command])
-            .disabled(meeting == nil)
+            .disabled(commandCenter.actions == nil)
 
             Divider()
 
             Button("Focus Chat") {
-                meeting?.focusChat()
+                commandCenter.actions?.focusChat()
             }
             .keyboardShortcut("c", modifiers: [.command, .shift])
-            .disabled(meeting == nil)
+            .disabled(commandCenter.actions == nil)
 
             Button("Show Participants") {
-                meeting?.showParticipants()
+                commandCenter.actions?.showParticipants()
             }
             .keyboardShortcut("p", modifiers: [.command, .shift])
-            .disabled(meeting == nil)
+            .disabled(commandCenter.actions == nil)
 
             Button("Toggle Sidebar") {
-                meeting?.toggleSidebar()
+                commandCenter.actions?.toggleSidebar()
             }
             .keyboardShortcut("\\", modifiers: [.command])
-            .disabled(meeting == nil)
+            .disabled(commandCenter.actions == nil)
 
             Divider()
 
             Button("Leave Meeting…") {
-                meeting?.leaveMeeting()
+                commandCenter.actions?.leaveMeeting()
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
-            .disabled(meeting == nil)
+            .disabled(commandCenter.actions == nil)
         }
     }
 }
