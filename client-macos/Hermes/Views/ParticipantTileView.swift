@@ -31,14 +31,20 @@ struct ParticipantTileView: View {
                     .font(.system(.caption, design: .rounded))
                     .fontWeight(.semibold)
 
-                Image(systemName: tile.isMicEnabled ? "mic.fill" : "mic.slash.fill")
-                    .font(.caption)
-                    .foregroundStyle(tile.isMicEnabled ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.red))
-
-                if tile.isSpeaking {
-                    Image(systemName: "waveform")
+                if tile.kind == .screenShare {
+                    Image(systemName: "rectangle.on.rectangle")
                         .font(.caption)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Image(systemName: tile.isMicEnabled ? "mic.fill" : "mic.slash.fill")
+                        .font(.caption)
+                        .foregroundStyle(tile.isMicEnabled ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.red))
+
+                    if tile.isSpeaking {
+                        Image(systemName: "waveform")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
                 }
 
                 Spacer(minLength: 0)

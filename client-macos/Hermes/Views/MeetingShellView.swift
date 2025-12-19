@@ -11,6 +11,7 @@ struct MeetingShellView: View {
     @State private var chatDraft: String = ""
     @State private var isScreenSharePickerPresented: Bool = false
     @State private var isDeviceSettingsPresented: Bool = false
+    @State private var stagedTileId: String? = nil
 
     enum SidebarTab: String, CaseIterable {
         case participants = "Participants"
@@ -128,6 +129,21 @@ struct MeetingShellView: View {
     }
 
     private var participantsGrid: some View {
+        Group {
+            if let stage = stageTile {
+                stageLayout(stage: stage)
+            } else {
+                galleryGrid
+            }
+        }
+        .onChange(of: liveKit.participantTiles.map { $0.id }) { _, ids in
+            if let staged = stagedTileId, !ids.contains(staged) {
+                stagedTileId = nil
+            }
+        }
+    }
+
+    private var galleryGrid: some View {
         ScrollView {
             let cols = [GridItem(.adaptive(minimum: 280, maximum: 520), spacing: 14)]
             LazyVGrid(columns: cols, spacing: 14) {
@@ -136,6 +152,52 @@ struct MeetingShellView: View {
                 }
             }
             .padding(14)
+        }
+    }
+
+    private var screenShareTiles: [ParticipantTile] {
+        liveKit.participantTiles.filter { $0.kind == .screenShare }
+    }
+
+    private var stageTile: ParticipantTile? {
+        guard !screenShareTiles.isEmpty else { return nil }
+        if let stagedTileId,
+           let pinned = screenShareTiles.first(where: { $0.id == stagedTileId })
+        {
+            return pinned
+        }
+        return screenShareTiles.first
+    }
+
+    private func stageLayout(stage: ParticipantTile) -> some View {
+        let thumbnails = liveKit.participantTiles.filter { $0.id != stage.id }
+
+        return VStack(spacing: 12) {
+            ParticipantTileView(tile: stage)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+
+            Divider()
+                .padding(.horizontal, 14)
+
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 12) {
+                    ForEach(thumbnails, id: \.id) { tile in
+                        ParticipantTileView(tile: tile)
+                            .frame(width: 220)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if tile.kind == .screenShare {
+                                    stagedTileId = tile.id
+                                }
+                            }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 14)
+            }
+            .scrollIndicators(.visible)
         }
     }
 
