@@ -37,7 +37,7 @@ struct AboutHermesView: View {
                     Divider()
                         .padding(.vertical, 4)
 
-                    Text("Developed by Hephaestus Systems (James)")
+                    Text("Developed by Hephaestus Systems(Uner YILMAZ)")
                         .font(.callout)
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
