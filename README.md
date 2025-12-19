@@ -81,3 +81,4 @@ Artifacts:
 - `dist/Hermes-macos.zip`
 
 Note: builds are **unsigned** by default (intended for demo/portfolio use).
+# Hermes
