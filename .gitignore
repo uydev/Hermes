@@ -18,6 +18,9 @@ backend/node_modules/
 backend/dist/
 backend/.env
 
+# Packaging output
+dist/
+
 # General
 *.log
 .env
